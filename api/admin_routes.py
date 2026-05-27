@@ -129,7 +129,9 @@ async def apply_admin_config(
     old_registry = getattr(request.app.state, "provider_registry", None)
     if isinstance(old_registry, ProviderRegistry):
         await old_registry.cleanup()
-    request.app.state.provider_registry = ProviderRegistry()
+    registry = ProviderRegistry()
+    request.app.state.provider_registry = registry
+    await registry.refresh_model_list_cache(get_cached_settings())
     request.app.state.admin_pending_fields = result["pending_fields"]
     return result
 

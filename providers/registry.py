@@ -273,13 +273,27 @@ def _referenced_provider_ids(settings: Settings) -> frozenset[str]:
     return frozenset(ref.provider_id for ref in settings.configured_chat_model_refs())
 
 
+def _static_provider_should_discover(
+    provider_id: str, referenced_provider_ids: frozenset[str], settings: Settings
+) -> bool:
+    """Return whether a static-credential provider should be model-discovered."""
+    if provider_id in referenced_provider_ids:
+        return True
+    # Ollama is static-credential for local mode, but cloud mode has a real key.
+    # When the cloud key is configured, advertise the full Ollama Cloud model list
+    # even if the fallback MODEL currently points at another provider.
+    if provider_id == "ollama" and settings.ollama_api_key.strip():
+        return True
+    return False
+
+
 def _model_list_provider_ids_for_settings(settings: Settings) -> tuple[str, ...]:
     """Return providers worth discovering for this process configuration."""
     referenced_provider_ids = _referenced_provider_ids(settings)
     provider_ids: list[str] = []
     for provider_id, descriptor in PROVIDER_DESCRIPTORS.items():
         if descriptor.static_credential is not None:
-            if provider_id in referenced_provider_ids:
+            if _static_provider_should_discover(provider_id, referenced_provider_ids, settings):
                 provider_ids.append(provider_id)
             continue
         if (

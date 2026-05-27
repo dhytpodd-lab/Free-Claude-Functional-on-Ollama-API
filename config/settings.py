@@ -501,12 +501,12 @@ class Settings(BaseSettings):
         """
         name_lower = claude_model_name.lower()
         if "opus" in name_lower and self.model_opus is not None:
-            return self.model_opus
+            return Settings.normalize_model_ref(self.model_opus)
         if "haiku" in name_lower and self.model_haiku is not None:
-            return self.model_haiku
+            return Settings.normalize_model_ref(self.model_haiku)
         if "sonnet" in name_lower and self.model_sonnet is not None:
-            return self.model_sonnet
-        return self.model
+            return Settings.normalize_model_ref(self.model_sonnet)
+        return Settings.normalize_model_ref(self.model)
 
     def configured_chat_model_refs(self) -> tuple[ConfiguredChatModelRef, ...]:
         """Return unique configured chat provider/model refs with source env keys."""
@@ -520,7 +520,8 @@ class Settings(BaseSettings):
         for source, model_ref in candidates:
             if model_ref is None:
                 continue
-            sources_by_ref.setdefault(model_ref, []).append(source)
+            normalized_ref = Settings.normalize_model_ref(model_ref)
+            sources_by_ref.setdefault(normalized_ref, []).append(source)
 
         return tuple(
             ConfiguredChatModelRef(
@@ -552,14 +553,25 @@ class Settings(BaseSettings):
         )
 
     @staticmethod
+    def normalize_model_ref(model_string: str) -> str:
+        """Return a plain provider/model ref from configured or gateway model ids."""
+        stripped = model_string.strip()
+        for gateway_prefix in ("anthropic/", "claude-3-freecc-no-thinking/"):
+            if stripped.startswith(gateway_prefix):
+                remainder = stripped[len(gateway_prefix) :]
+                if "/" in remainder:
+                    return remainder
+        return stripped
+
+    @staticmethod
     def parse_provider_type(model_string: str) -> str:
         """Extract provider type from any 'provider/model' string."""
-        return model_string.split("/", 1)[0]
+        return Settings.normalize_model_ref(model_string).split("/", 1)[0]
 
     @staticmethod
     def parse_model_name(model_string: str) -> str:
         """Extract model name from any 'provider/model' string."""
-        return model_string.split("/", 1)[1]
+        return Settings.normalize_model_ref(model_string).split("/", 1)[1]
 
     model_config = SettingsConfigDict(
         env_file=_env_files(),
